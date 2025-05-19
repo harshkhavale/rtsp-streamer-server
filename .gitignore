@@ -1,0 +1,75 @@
+db.sqlite3
+test.mp4
+test2.mp4
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Django stuff:
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+media/
+staticfiles/
+# If you collect static to a folder, ignore it too:
+static/
+
+# Django migrations
+**/migrations/*.pyc
+**/migrations/*.py
+!**/migrations/__init__.py
+
+# Pytest cache
+.pytest_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Virtual environment
+.env
+.venv
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# dotenv files (environment variables)
+.env
+
+# If you use Docker
+docker-compose.override.yml
+
+# Ignore celery beat schedule files if you use celery
+celerybeat-schedule
+
+# Ignore local settings file (if any)
+local_settings.py
