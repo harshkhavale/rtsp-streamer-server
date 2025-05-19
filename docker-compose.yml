@@ -1,21 +1,13 @@
-services:
-  redis:
-    image: redis:latest
-    restart: always
-    networks:
-      - backend_net
+version: '3.8'
 
+services:
   rtsp_backend:
     build: .
-    depends_on:
-      - redis
+    container_name: rtsp_backend
     ports:
       - "8000:8000"
     command: daphne -b 0.0.0.0 -p 8000 rtsp_backend.asgi:application
     restart: always
-    networks:
-      - backend_net
-
-networks:
-  backend_net:
-    driver: bridge
+    environment:
+      # Use your Render Redis URL here (set this in Render's environment variables)
+      REDIS_URL: redis://red-cs99ah2j1k6c73fke8ng:6379
