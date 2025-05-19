@@ -1,0 +1,26 @@
+
+version: '3.8'
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    networks:
+      - backend_net
+
+  rtsp_backend:
+    build: .
+    container_name: rtsp_backend
+    depends_on:
+      - redis
+    ports:
+      - "8000:8000"
+    command: daphne -b 0.0.0.0 -p 8000 rtsp_backend.asgi:application
+    restart: always
+    # network_mode: "host"
+    networks:
+      - backend_net
+
+networks:
+  backend_net:
