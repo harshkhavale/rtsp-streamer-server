@@ -6,4 +6,4 @@ ffmpeg-python
 opencv-python
 django-cors-headers
 daphne
-
+python-decouple
