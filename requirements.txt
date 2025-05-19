@@ -1,0 +1,9 @@
+Django>=4.2
+channels
+channels_redis
+djangorestframework
+ffmpeg-python
+opencv-python
+django-cors-headers
+daphne
+
