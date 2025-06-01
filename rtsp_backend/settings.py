@@ -29,8 +29,8 @@ DEBUG = config('DEBUG', default='False') == 'True'
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
 AUTH_USER_MODEL = 'stream.User'
-MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
 
 # Application definition
 

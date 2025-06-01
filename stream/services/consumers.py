@@ -13,6 +13,7 @@ from django.core.files import File
 from stream.models import Detection
 from urllib.parse import parse_qs, unquote
 
+from asgiref.sync import sync_to_async
 
 class FaceDetector:
     def __init__(self, confidence_threshold=0.3):  # Lower threshold for testing
@@ -44,9 +45,14 @@ class StreamConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()
         print("✅ WebSocket connected")
-
+        self.stream_id = None  # Initialize stream_id
         query_string = self.scope["query_string"].decode()  # bytes to str
         query_params = parse_qs(query_string)
+        stream_ids = query_params.get("stream_id", [])
+        if stream_ids:
+            self.stream_id = stream_ids[0]
+            print(f"📡 Connected with stream_id: {self.stream_id}")
+        
         rtsp_urls = query_params.get("url", [])
         if rtsp_urls:
             rtsp_url = unquote(rtsp_urls[0])
@@ -176,7 +182,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
                 now_time = time.time()
                 if now_time - self.last_frame_processed_time >= self.frame_interval:
-                    await self.detect_and_alert(frame)
+                    await self.detect_and_alert(frame, stream_id=self.stream_id)
                     self.last_frame_processed_time = now_time
 
                 success, buffer = cv2.imencode('.jpg', frame)
@@ -213,7 +219,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
                 except asyncio.CancelledError:
                     print("🛑 FFmpeg error logging task cancelled")
 
-    async def detect_and_alert(self, frame):
+    async def detect_and_alert(self, frame, stream_id=None):
         try:
             # Run detection in a thread to avoid blocking event loop
             detections = await asyncio.to_thread(self.detector.detect_faces, frame)
@@ -249,9 +255,11 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
             if saved:
                 with open(filepath, 'rb') as f:
-                    detection = Detection.objects.create(
-                        confidence=confidence,
-                        snapshot=File(f, name=filename)
+                    detection = await sync_to_async(Detection.objects.create)(
+                        confidence_score=confidence,
+                        image_path=File(f, name=filename),
+                        stream_id=stream_id  # This fixes the error
+
                     )
                 print(f"📦 Saved detection to DB: {detection}")
 
