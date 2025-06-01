@@ -8,6 +8,6 @@ django-cors-headers
 daphne
 python-decouple
 mtcnn
-tensorflow
 Pillow
-
+djangorestframework-simplejwt
+tensorflow-cpu

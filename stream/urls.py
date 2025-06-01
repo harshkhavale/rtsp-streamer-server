@@ -1,9 +1,13 @@
 from django.urls import path, include
+from stream.views.auth import AdminLoginView, AdminRegisterView
 from stream.views.stream import list_streams, create_stream, update_stream_status, delete_stream, get_stream
 from stream.views.alert import list_alerts,  get_alert, update_alert, delete_alert
 from stream.views.detection import create_detection, list_detections, get_detection, update_detection, delete_detection
 
 urlpatterns = [
+    #auth
+    path('login/', AdminLoginView.as_view(), name='admin_login'),
+    path('register/', AdminRegisterView.as_view(), name='admin_register'),
     #streams
     path('streams/', list_streams, name='list_streams'),
     path('streams/create/', create_stream, name='create_stream'),

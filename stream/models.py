@@ -4,6 +4,8 @@ from django.contrib.auth.models import AbstractUser
 # 1. Users
 class User(AbstractUser):
     last_login_timestamp = models.DateTimeField(null=True, blank=True)
+    def __str__(self):
+        return self.username
 
 # 2. Streams
 class Stream(models.Model):
