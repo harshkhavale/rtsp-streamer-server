@@ -10,7 +10,7 @@ from django.utils.timezone import now
 from channels.generic.websocket import AsyncWebsocketConsumer
 import json
 from django.core.files import File
-from stream.models import Detection
+from stream.models import Alert, Detection, Stream
 from urllib.parse import parse_qs, unquote
 
 from asgiref.sync import sync_to_async
@@ -218,15 +218,13 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     await self.log_task
                 except asyncio.CancelledError:
                     print("🛑 FFmpeg error logging task cancelled")
-
     async def detect_and_alert(self, frame, stream_id=None):
         try:
-            # Run detection in a thread to avoid blocking event loop
+            # Detect faces (run in thread to avoid blocking)
             detections = await asyncio.to_thread(self.detector.detect_faces, frame)
-
             print(f"📸 Number of faces detected: {len(detections)}")
 
-            confident_faces = [d for d in detections if d['confidence'] > self.detector.confidence_threshold]
+            confident_faces = [d for d in detections if d['confidence'] >= self.detector.confidence_threshold]
             print(f"💡 Confident faces (above {self.detector.confidence_threshold}): {len(confident_faces)}")
 
             if not confident_faces:
@@ -238,30 +236,37 @@ class StreamConsumer(AsyncWebsocketConsumer):
                 print("⏳ Alert cooldown not finished.")
                 return
 
+            # Pick best face
             best_face = max(confident_faces, key=lambda x: x['confidence'])
             x, y, w, h = best_face['box']
             confidence = best_face['confidence']
             print(f"✅ Detected face with confidence {confidence:.2f} at [{x}, {y}, {w}, {h}]")
 
+            # Draw rectangle around detected face
             frame_copy = frame.copy()
             cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
+            # Save snapshot
             timestamp_str = now().strftime('%Y%m%d_%H%M%S_%f')
             filename = f"detection_{timestamp_str}.jpg"
             filepath = os.path.join(self.snapshots_dir, filename)
-
             saved = cv2.imwrite(filepath, frame_copy)
             print(f"💾 Saving snapshot: {filepath} -> {'Success' if saved else 'Failed'}")
 
             if saved:
+                stream = await sync_to_async(Stream.objects.get)(id=stream_id)
                 with open(filepath, 'rb') as f:
                     detection = await sync_to_async(Detection.objects.create)(
                         confidence_score=confidence,
                         image_path=File(f, name=filename),
-                        stream_id=stream_id  # This fixes the error
-
+                        stream=stream
                     )
+                    await sync_to_async(Alert.objects.create)(
+                        detection=detection
+                    )
+
                 print(f"📦 Saved detection to DB: {detection}")
+                print("🚨 Created alert for detection.")
 
                 self.last_alert_time = now_time
 
@@ -269,7 +274,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     'type': 'face_alert',
                     'timestamp': timestamp_str,
                     'confidence': confidence,
-                    'snapshot': detection.snapshot.url
+                    'snapshot': detection.image_path.url if detection.image_path else ''
                 })
 
         except Exception as e:

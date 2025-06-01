@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from stream.models import Detection
+from stream.models import Detection, Stream
 import json
 
 def parse_json(request):
@@ -17,20 +17,23 @@ def create_detection(request):
     if data is None:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
-    required_fields = ['name', 'confidence']
+    required_fields = ['stream_id', 'confidence_score']
     for field in required_fields:
         if field not in data:
             return JsonResponse({'error': f'Missing required field: {field}'}, status=400)
 
     try:
+        stream = Stream.objects.get(id=data['stream_id'])
         detection = Detection.objects.create(
-            name=data['name'],
-            confidence=data['confidence']
+            stream=stream,
+            confidence_score=data['confidence_score']
         )
         return JsonResponse({
             'id': detection.id,
             'message': 'Detection created'
         }, status=201)
+    except Stream.DoesNotExist:
+        return JsonResponse({'error': 'Stream not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -42,9 +45,11 @@ def list_detections(request):
     for d in detections:
         result.append({
             'id': d.id,
-            'name': d.name,
-            'confidence': d.confidence,
+            'stream': d.stream.name,
+            'confidence': d.confidence_score,
+            'timestamp': d.timestamp.isoformat(),
         })
+
     return JsonResponse({'detections': result})
 
 
@@ -54,8 +59,9 @@ def get_detection(request, detection_id):
         d = Detection.objects.get(id=detection_id)
         data = {
             'id': d.id,
-            'name': d.name,
-            'confidence': d.confidence,
+            'stream': d.stream.name,
+            'confidence': d.confidence_score,
+            'timestamp': d.timestamp.isoformat(),
         }
         return JsonResponse({'detection': data})
     except Detection.DoesNotExist:
@@ -74,20 +80,15 @@ def update_detection(request, detection_id):
     except Detection.DoesNotExist:
         return JsonResponse({'error': 'Detection not found'}, status=404)
 
-    if request.method == "PUT":
-        # For PUT, replace all fields
-        required_fields = ['name', 'confidence']
-        for field in required_fields:
-            if field not in data:
-                return JsonResponse({'error': f'Missing required field: {field}'}, status=400)
-        detection.name = data['name']
-        detection.confidence = data['confidence']
-    else:
-        # PATCH - update fields partially
-        if 'name' in data:
-            detection.name = data['name']
-        if 'confidence' in data:
-            detection.confidence = data['confidence']
+    if 'confidence_score' in data:
+        detection.confidence_score = data['confidence_score']
+    
+    # Optional: allow updating stream
+    if 'stream_id' in data:
+        try:
+            detection.stream = Stream.objects.get(id=data['stream_id'])
+        except Stream.DoesNotExist:
+            return JsonResponse({'error': 'Stream not found'}, status=404)
 
     detection.save()
     return JsonResponse({'message': 'Detection updated'})
