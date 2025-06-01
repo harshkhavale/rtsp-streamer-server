@@ -12,11 +12,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 from decouple import config, Csv
-BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 # Quick-start development settings - unsuitable for production
@@ -30,7 +28,9 @@ SECRET_KEY = config('SECRET_KEY', default='fallback-secret-key')
 DEBUG = config('DEBUG', default='False') == 'True'
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
-
+AUTH_USER_MODEL = 'stream.User'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Application definition
 

@@ -7,3 +7,7 @@ opencv-python
 django-cors-headers
 daphne
 python-decouple
+mtcnn
+tensorflow
+Pillow
+
