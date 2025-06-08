@@ -12,6 +12,8 @@ import json
 from django.core.files import File
 from stream.models import Alert, Detection, Stream
 from urllib.parse import parse_qs, unquote
+from collections import deque
+from datetime import datetime, timedelta
 
 from asgiref.sync import sync_to_async
 
@@ -29,6 +31,58 @@ class FaceDetector:
         return results
 
 
+class PerformanceMonitor:
+    def __init__(self, window_size=60):  # 60 seconds window
+        self.frame_times = deque(maxlen=window_size)
+        self.processing_times = deque(maxlen=window_size)
+        self.detection_times = deque(maxlen=window_size)
+        self.start_time = time.time()
+        self.total_frames = 0
+        self.total_detections = 0
+
+    def add_frame(self, processing_time=None, detection_time=None):
+        current_time = time.time()
+        self.frame_times.append(current_time)
+        if processing_time is not None:
+            self.processing_times.append(processing_time)
+        if detection_time is not None:
+            self.detection_times.append(detection_time)
+        self.total_frames += 1
+        if detection_time is not None:
+            self.total_detections += 1
+
+    def get_stats(self):
+        if not self.frame_times:
+            return {
+                'current_fps': 0,
+                'avg_processing_time': 0,
+                'avg_detection_time': 0,
+                'total_frames': 0,
+                'total_detections': 0,
+                'uptime': 0
+            }
+
+        current_time = time.time()
+        window_start = current_time - 60  # Last 60 seconds
+        
+        # Calculate FPS for the last minute
+        recent_frames = [t for t in self.frame_times if t >= window_start]
+        current_fps = len(recent_frames) / 60 if recent_frames else 0
+
+        # Calculate average processing and detection times
+        avg_processing = sum(self.processing_times) / len(self.processing_times) if self.processing_times else 0
+        avg_detection = sum(self.detection_times) / len(self.detection_times) if self.detection_times else 0
+
+        return {
+            'current_fps': round(current_fps, 2),
+            'avg_processing_time': round(avg_processing * 1000, 2),  # Convert to ms
+            'avg_detection_time': round(avg_detection * 1000, 2),    # Convert to ms
+            'total_frames': self.total_frames,
+            'total_detections': self.total_detections,
+            'uptime': round(current_time - self.start_time, 2)
+        }
+
+
 class StreamConsumer(AsyncWebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -40,6 +94,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
         self.process = None
         self.log_task = None
         self.snapshots_dir = os.path.join(settings.MEDIA_ROOT, 'snapshots')
+        self.performance_monitor = PerformanceMonitor()
         os.makedirs(self.snapshots_dir, exist_ok=True)
 
     async def connect(self):
@@ -169,6 +224,8 @@ class StreamConsumer(AsyncWebsocketConsumer):
                 if self.pause:
                     await asyncio.sleep(0.5)
                     continue
+
+                frame_start_time = time.time()
                 raw_frame = await asyncio.to_thread(self.process.stdout.read, frame_size)
                 if not raw_frame or len(raw_frame) < frame_size:
                     print(f"🚫 No frame or incomplete frame: got {len(raw_frame) if raw_frame else 0} bytes, expected {frame_size}")
@@ -181,9 +238,24 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     print(f"Frame shape: {frame.shape}")
 
                 now_time = time.time()
+                processing_time = now_time - frame_start_time
+
                 if now_time - self.last_frame_processed_time >= self.frame_interval:
+                    detection_start_time = time.time()
                     await self.detect_and_alert(frame, stream_id=self.stream_id)
+                    detection_time = time.time() - detection_start_time
                     self.last_frame_processed_time = now_time
+                    self.performance_monitor.add_frame(processing_time, detection_time)
+                else:
+                    self.performance_monitor.add_frame(processing_time)
+
+                # Send performance stats every 5 seconds
+                if frame_count % 75 == 0:  # 5 seconds at 15 FPS
+                    stats = self.performance_monitor.get_stats()
+                    await self.send_json({
+                        'type': 'performance_stats',
+                        'stats': stats
+                    })
 
                 success, buffer = cv2.imencode('.jpg', frame)
                 if not success:
@@ -218,6 +290,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
                     await self.log_task
                 except asyncio.CancelledError:
                     print("🛑 FFmpeg error logging task cancelled")
+
     async def detect_and_alert(self, frame, stream_id=None):
         try:
             # Detect faces (run in thread to avoid blocking)
