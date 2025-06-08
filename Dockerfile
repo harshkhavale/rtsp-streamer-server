@@ -32,8 +32,12 @@ COPY . .
 # Collect static files (important for production)
 RUN python manage.py collectstatic --noinput
 
+# Copy and set permissions
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Expose port (used by Daphne or ASGI server)
 EXPOSE 8000
 
-# Run the app using Daphne for WebSocket support
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "rtsp_backend.asgi:application"]
+# New
+ENTRYPOINT ["/entrypoint.sh"]
